@@ -28,6 +28,7 @@ export default function App() {
   const mainRef = useRef<HTMLDivElement | null>(null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [saveMessage, setSaveMessage] = useState('');
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
 
   const getItemTotal = (item: BagItem) => {
     if (item.pricingType === 'weight') {
@@ -185,6 +186,21 @@ export default function App() {
     return entries.reduce((max, current) => current[1] > max[1] ? current : max);
   }, [historicalDeptTotals]);
 
+  const startEditPurchase = (purchase: Purchase) => {
+    setEditingPurchase(purchase);
+    setBag(purchase.items);
+    setCurrentView('bag');
+    setSaveMessage('');
+  };
+
+  const deletePurchase = (id: string) => {
+    if (!window.confirm('Deseja excluir esta compra salva?')) return;
+    setPurchases(prev => prev.filter(p => p.id !== id));
+    if (editingPurchase?.id === id) {
+      setEditingPurchase(null);
+    }
+  };
+
   const groupedBag = useMemo(() => {
     const groups: Record<string, BagItem[]> = {};
     const deptOrder = new Map(DEPARTMENTS.map((dept, idx) => [dept, idx]));
@@ -241,16 +257,27 @@ export default function App() {
 
   const savePurchase = () => {
     if (bag.length === 0) return;
-    const newPurchase: Purchase = {
-      id: crypto.randomUUID(),
-      createdAt: Date.now(),
-      items: bag,
-      total
-    };
-    setPurchases(prev => [newPurchase, ...prev]);
+    if (editingPurchase) {
+      const updated: Purchase = {
+        ...editingPurchase,
+        items: bag,
+        total
+      };
+      setPurchases(prev => prev.map(p => p.id === updated.id ? updated : p));
+      setSaveMessage('Compra atualizada no histórico');
+    } else {
+      const newPurchase: Purchase = {
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        items: bag,
+        total
+      };
+      setPurchases(prev => [newPurchase, ...prev]);
+      setSaveMessage('Compra salva no histórico');
+    }
     setBag([]);
     setCurrentView('departments');
-    setSaveMessage('Compra salva no histórico');
+    setEditingPurchase(null);
   };
 
   const closeModal = () => {
@@ -306,6 +333,7 @@ export default function App() {
   const clearBag = () => {
     if (window.confirm('Deseja limpar toda a sacola?')) {
       setBag([]);
+      setEditingPurchase(null);
     }
   };
 
@@ -461,6 +489,12 @@ export default function App() {
             {saveMessage && (
               <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-100 text-emerald-800 font-semibold rounded-2xl">
                 {saveMessage}
+              </div>
+            )}
+
+            {editingPurchase && (
+              <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-100 text-amber-800 font-semibold rounded-2xl">
+                Editando compra salva de {new Date(editingPurchase.createdAt).toLocaleDateString('pt-BR')}. Salve para atualizar ou limpe para começar do zero.
               </div>
             )}
 
@@ -721,33 +755,49 @@ export default function App() {
                     })();
                     return (
                       <div key={purchase.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex-1">
                             <div className="text-sm font-bold text-slate-800">
                               {date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </div>
                             <div className="text-[11px] text-slate-500 uppercase font-semibold">
                               {purchase.items.length} item(s){topDept ? ` · Mais gasto: ${topDept[0]}` : ''}
                             </div>
+                            {topDept && (
+                              <div className="mt-1">
+                                <div className="flex justify-between text-[11px] font-semibold text-slate-700 mb-0.5">
+                                  <span>{topDept[0]}</span>
+                                  <span>{Math.round((topDept[1] / purchase.total) * 100)}%</span>
+                                </div>
+                                <div className="w-full h-2.5 bg-white rounded-full overflow-hidden border border-slate-200">
+                                  <div 
+                                    className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 rounded-full transition-all" 
+                                    style={{ width: `${Math.round((topDept[1] / purchase.total) * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          <div className="text-lg font-black text-slate-900">
-                            {purchase.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          <div className="text-right">
+                            <div className="text-lg font-black text-slate-900">
+                              {purchase.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </div>
+                            <div className="flex gap-2 justify-end mt-2">
+                              <button 
+                                onClick={() => startEditPurchase(purchase)}
+                                className="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 rounded-lg border border-indigo-100"
+                              >
+                                Editar
+                              </button>
+                              <button 
+                                onClick={() => deletePurchase(purchase.id)}
+                                className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 rounded-lg border border-red-100"
+                              >
+                                Excluir
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        {topDept && (
-                          <div className="mt-2">
-                            <div className="flex justify-between text-[11px] font-semibold text-slate-700 mb-1">
-                              <span>{topDept[0]}</span>
-                              <span>{Math.round((topDept[1] / purchase.total) * 100)}%</span>
-                            </div>
-                            <div className="w-full h-2.5 bg-white rounded-full overflow-hidden border border-slate-200">
-                              <div 
-                                className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 rounded-full transition-all" 
-                                style={{ width: `${Math.round((topDept[1] / purchase.total) * 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
