@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, ShoppingBag, Plus, Trash2, ArrowLeft, X, Pencil, Minus, Save, Clock3, LayoutDashboard } from 'lucide-react';
+import { Search, ShoppingBag, Plus, Trash2, ArrowLeft, X, Pencil, Minus, Save, Clock3, BarChart3 } from 'lucide-react';
 import { BagItem, ViewState, Purchase } from './types';
 import { DEPARTMENTS, PRODUCTS } from './constants';
 
@@ -128,6 +128,12 @@ export default function App() {
     const timer = setTimeout(() => setSaveMessage(''), 2500);
     return () => clearTimeout(timer);
   }, [saveMessage]);
+
+  useEffect(() => {
+    if (currentView !== 'bag' && saveMessage) {
+      setSaveMessage('');
+    }
+  }, [currentView, saveMessage]);
 
   const filteredProducts = useMemo(() => {
     if (searchQuery.trim()) {
@@ -315,7 +321,7 @@ export default function App() {
               className={`relative p-2 rounded-xl ${currentView === 'history' ? 'bg-indigo-500/30 text-white' : ''}`}
               title="Histórico"
             >
-              <LayoutDashboard size={22} />
+              <BarChart3 size={22} />
               {purchases.length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full px-1.5 py-[2px] border border-indigo-500/30">
                   {purchases.length}
@@ -624,7 +630,7 @@ export default function App() {
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Resumo ao longo do tempo</div>
                   <div className="text-lg font-black text-slate-900">Gastos salvos</div>
                 </div>
-                <LayoutDashboard className="text-slate-300" size={20} />
+                <BarChart3 className="text-slate-300" size={20} />
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="bg-slate-50 rounded-xl p-3">
