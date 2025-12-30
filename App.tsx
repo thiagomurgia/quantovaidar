@@ -29,6 +29,10 @@ export default function App() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [saveMessage, setSaveMessage] = useState('');
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrCandidates, setOcrCandidates] = useState<{ name: string; price: number }[]>([]);
+  const [ocrError, setOcrError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const getItemTotal = (item: BagItem) => {
     if (item.pricingType === 'weight') {
@@ -199,6 +203,73 @@ export default function App() {
     if (editingPurchase?.id === id) {
       setEditingPurchase(null);
     }
+  };
+
+  const parseOcrText = (text: string) => {
+    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const blocked = ['subtotal', 'total', 'troco', 'cartao', 'pix', 'credito', 'debito', 'dinheiro', 'valor recebido'];
+    const candidates: { name: string; price: number }[] = [];
+    lines.forEach(line => {
+      const cleanedLine = line.replace(/\s+/g, ' ');
+      const match = cleanedLine.match(/(.+?)\s+([0-9]+[.,][0-9]{2})$/);
+      if (!match) return;
+      const rawName = match[1].replace(/[^A-Za-zÀ-ÿ0-9\s]/g, '').trim();
+      const price = parseFloat(match[2].replace(',', '.'));
+      if (!rawName || isNaN(price) || price <= 0) return;
+      const lower = rawName.toLowerCase();
+      if (blocked.some(b => lower.includes(b))) return;
+      candidates.push({ name: rawName, price });
+    });
+    return candidates.slice(0, 20);
+  };
+
+  const handleOcrFile = async (file?: File | null) => {
+    if (!file) return;
+    setOcrLoading(true);
+    setOcrError('');
+    setOcrCandidates([]);
+    try {
+      const Tesseract = await import('tesseract.js');
+      const { data } = await Tesseract.recognize(file, 'por');
+      const candidates = parseOcrText(data.text);
+      setOcrCandidates(candidates);
+      if (candidates.length === 0) {
+        setOcrError('Não conseguimos identificar itens. Tente uma foto mais nítida.');
+      }
+    } catch (err) {
+      console.error('OCR error', err);
+      setOcrError('Falha ao ler a nota. Verifique a iluminação ou tente novamente.');
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const addOcrCandidateToBag = (candidate: { name: string; price: number }) => {
+    const newItem: BagItem = {
+      id: crypto.randomUUID(),
+      name: candidate.name,
+      department: 'Outros',
+      unitPrice: candidate.price,
+      quantity: 1,
+      pricingType: 'unit',
+      timestamp: Date.now()
+    };
+    setBag(prev => [newItem, ...prev]);
+  };
+
+  const addAllOcrCandidates = () => {
+    if (!ocrCandidates.length) return;
+    const now = Date.now();
+    const mapped = ocrCandidates.map((c, idx) => ({
+      id: crypto.randomUUID(),
+      name: c.name,
+      department: 'Outros',
+      unitPrice: c.price,
+      quantity: 1,
+      pricingType: 'unit',
+      timestamp: now - idx
+    }));
+    setBag(prev => [...mapped, ...prev]);
   };
 
   const groupedBag = useMemo(() => {
@@ -520,6 +591,66 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-5">
+                <div className="p-4 bg-white border border-indigo-100 rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-xs font-semibold text-indigo-500 uppercase tracking-widest">OCR beta</div>
+                      <div className="text-lg font-black text-slate-900">Importar nota/etiqueta</div>
+                    </div>
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg shadow hover:bg-indigo-700 disabled:opacity-60"
+                      disabled={ocrLoading}
+                    >
+                      {ocrLoading ? 'Lendo...' : 'Escolher foto'}
+                    </button>
+                    <input 
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      ref={fileInputRef}
+                      onChange={(e) => handleOcrFile(e.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mb-2">Tire foto clara da nota ou etiqueta. Os itens identificados aparecem abaixo para revisão.</p>
+                  {ocrError && (
+                    <div className="text-xs text-red-600 font-semibold">{ocrError}</div>
+                  )}
+                  {ocrCandidates.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-semibold text-slate-500 uppercase">Itens sugeridos ({ocrCandidates.length})</div>
+                        <button 
+                          onClick={addAllOcrCandidates}
+                          className="text-xs font-bold text-indigo-700"
+                        >
+                          Adicionar todos
+                        </button>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto space-y-2">
+                        {ocrCandidates.map((cand, idx) => (
+                          <div key={`${cand.name}-${idx}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                            <div>
+                              <div className="text-sm font-bold text-slate-800">{cand.name}</div>
+                              <div className="text-xs text-slate-500">{cand.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                            </div>
+                            <button 
+                              onClick={() => addOcrCandidateToBag(cand)}
+                              className="px-2 py-1 text-xs font-bold text-indigo-700 bg-white border border-indigo-100 rounded-lg"
+                            >
+                              Adicionar
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {ocrLoading && (
+                    <div className="text-xs text-indigo-700 font-semibold mt-2">Lendo imagem...</div>
+                  )}
+                </div>
+
                 {/* Spend breakdown */}
                 <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
                   <div className="flex items-center justify-between mb-3">
@@ -571,7 +702,7 @@ export default function App() {
                               <h3 className="font-bold text-slate-800 text-lg leading-tight">{item.name}</h3>
                               {item.pricingType === 'weight' ? (
                                 <p className="text-xs text-slate-400 font-semibold uppercase">
-                                  R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg · {(item.weightGrams ?? 0).toLocaleString('pt-BR')} g
+                                  R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg · {(item.weightGrams ?? 0).toLocaleString('pt-BR')} g ({((item.weightGrams ?? 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg)
                                 </p>
                               ) : (
                                 <p className="text-xs text-slate-400 font-semibold uppercase">
@@ -841,7 +972,7 @@ export default function App() {
             </div>
 
             <label className="block text-slate-500 text-xs font-bold uppercase mb-2">
-              {isWeightMode ? 'Preço por kg' : 'Qual o preço estimado?'}
+            {isWeightMode ? 'Preço por kg' : 'Qual o preço estimado?'}
             </label>
             <div className="relative mb-6">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-400">R$</span>
@@ -858,23 +989,30 @@ export default function App() {
               />
             </div>
 
-            {isWeightMode && (
-              <div className="mb-4">
-                <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Peso total (gramas)</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="number"
-                    min="1"
-                    step="50"
-                    value={weightInput}
-                    onChange={(e) => setWeightInput(Number(e.target.value))}
-                    className="w-full px-4 py-4 bg-slate-100 rounded-2xl border-none focus:ring-4 focus:ring-indigo-100 text-2xl font-black text-slate-900 transition-all placeholder:text-slate-200"
-                    placeholder="ex: 800"
-                  />
-                  <span className="text-sm font-semibold text-slate-400 uppercase">g</span>
+              {isWeightMode && (
+                <div className="mb-4">
+                  <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Peso total (gramas)</label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="number"
+                      min="1"
+                      step="50"
+                      value={weightInput || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const parsed = val === '' ? 0 : Math.max(0, Number(val));
+                        setWeightInput(parsed);
+                      }}
+                      className="w-full px-4 py-4 bg-slate-100 rounded-2xl border-none focus:ring-4 focus:ring-indigo-100 text-2xl font-black text-slate-900 transition-all placeholder:text-slate-200"
+                      placeholder="ex: 800"
+                    />
+                    <span className="text-sm font-semibold text-slate-400 uppercase">g</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {(weightInput / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+                  </p>
                 </div>
-              </div>
-            )}
+              )}
 
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">
