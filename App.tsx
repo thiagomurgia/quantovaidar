@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, ShoppingBag, Plus, Trash2, ArrowLeft, X, Pencil, Minus, Save, Clock3 } from 'lucide-react';
+import { Search, ShoppingBag, Plus, Trash2, ArrowLeft, X, Pencil, Minus, Save, Clock3, LayoutDashboard } from 'lucide-react';
 import { BagItem, ViewState, Purchase } from './types';
 import { DEPARTMENTS, PRODUCTS } from './constants';
 
@@ -101,6 +101,18 @@ export default function App() {
 
   const total = useMemo(() => {
     return bag.reduce((acc, item) => acc + getItemTotal(item), 0);
+  }, [bag]);
+
+  const topCurrentGroup = useMemo(() => {
+    if (!bag.length) return null;
+    const groups: Record<string, number> = {};
+    bag.forEach(item => {
+      const subtotal = getItemTotal(item);
+      groups[item.department] = (groups[item.department] ?? 0) + subtotal;
+    });
+    const entries = Object.entries(groups);
+    if (!entries.length) return null;
+    return entries.reduce((max, curr) => curr[1] > max[1] ? curr : max);
   }, [bag]);
 
   useEffect(() => {
@@ -303,7 +315,7 @@ export default function App() {
               className={`relative p-2 rounded-xl ${currentView === 'history' ? 'bg-indigo-500/30 text-white' : ''}`}
               title="Histórico"
             >
-              <Clock3 size={22} />
+              <LayoutDashboard size={22} />
               {purchases.length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full px-1.5 py-[2px] border border-indigo-500/30">
                   {purchases.length}
@@ -493,9 +505,9 @@ export default function App() {
                       );
                     })}
                   </div>
-                  {groupedBag[0] && (
+                  {topCurrentGroup && (
                     <p className="text-[11px] text-indigo-800 mt-3">
-                      Dica: tente reduzir {groupedBag[0].dept} em 10% para baixar o total.
+                      Dica: {topCurrentGroup[0]} responde por {total > 0 ? Math.round((topCurrentGroup[1] / total) * 100) : 0}% — reduzir 10% aqui já corta o total.
                     </p>
                   )}
                 </div>
@@ -612,7 +624,7 @@ export default function App() {
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Resumo ao longo do tempo</div>
                   <div className="text-lg font-black text-slate-900">Gastos salvos</div>
                 </div>
-                <Clock3 className="text-slate-300" size={20} />
+                <LayoutDashboard className="text-slate-300" size={20} />
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="bg-slate-50 rounded-xl p-3">
@@ -636,6 +648,45 @@ export default function App() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Onde vai o dinheiro</div>
+                  <div className="text-lg font-black text-slate-900">Departamentos no histórico</div>
+                </div>
+              </div>
+              {Object.keys(historicalDeptTotals).length === 0 ? (
+                <p className="text-sm text-slate-500">Salve compras para ver o detalhamento.</p>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(historicalDeptTotals)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([dept, value]) => {
+                      const percent = totalSpentAllTime > 0 ? Math.round((value / totalSpentAllTime) * 100) : 0;
+                      return (
+                        <div key={`hist-${dept}`}>
+                          <div className="flex justify-between text-[12px] font-semibold text-slate-800 mb-1">
+                            <span>{dept}</span>
+                            <span>{value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · {percent}%</span>
+                          </div>
+                          <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                            <div 
+                              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 rounded-full transition-all" 
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {topHistoricalDept && (
+                    <p className="text-[11px] text-indigo-800 mt-3">
+                      Dica: {topHistoricalDept[0]} lidera no histórico ({Math.round((topHistoricalDept[1] / totalSpentAllTime) * 100)}%). Planeje cortes aí nas próximas compras.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
@@ -677,6 +728,20 @@ export default function App() {
                             {purchase.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </div>
                         </div>
+                        {topDept && (
+                          <div className="mt-2">
+                            <div className="flex justify-between text-[11px] font-semibold text-slate-700 mb-1">
+                              <span>{topDept[0]}</span>
+                              <span>{Math.round((topDept[1] / purchase.total) * 100)}%</span>
+                            </div>
+                            <div className="w-full h-2.5 bg-white rounded-full overflow-hidden border border-slate-200">
+                              <div 
+                                className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 rounded-full transition-all" 
+                                style={{ width: `${Math.round((topDept[1] / purchase.total) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
