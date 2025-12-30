@@ -166,14 +166,6 @@ export default function App() {
     setBag(prev => prev.filter(item => item.id !== id));
   };
 
-  const closeModal = () => {
-    setIsPriceModalOpen(false);
-    setSelectedProduct(null);
-    setSelectedItemId(null);
-    setPriceInput('');
-    setQuantityInput(1);
-  };
-
   const clearBag = () => {
     if (window.confirm('Deseja limpar toda a sacola?')) {
       setBag([]);
