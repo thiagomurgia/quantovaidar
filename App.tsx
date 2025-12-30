@@ -44,6 +44,7 @@ export default function App() {
     pricingType: 'unit' | 'weight';
     weightGrams?: number;
   }[]>([]);
+  const [qrManualUrl, setQrManualUrl] = useState('');
 
   const getItemTotal = (item: BagItem) => {
     if (item.pricingType === 'weight') {
@@ -768,13 +769,18 @@ export default function App() {
                       <div className="text-lg font-black text-slate-900">Ler QR da nota</div>
                     </div>
                     <button 
-                      onClick={() => setQrOpen(prev => !prev)}
+                      onClick={() => {
+                        setQrError('');
+                        setQrStatus('idle');
+                        setQrCandidates([]);
+                        setQrOpen(prev => !prev);
+                      }}
                       className="px-3 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg shadow hover:bg-indigo-700"
                     >
                       {qrOpen ? 'Fechar' : 'Escanear'}
                     </button>
                   </div>
-                  <p className="text-xs text-slate-500 mb-2">Aponte a câmera para o QR da NFC-e. Se a SEFAZ permitir, os itens aparecem para revisão.</p>
+                  <p className="text-xs text-slate-500 mb-2">Aponte a câmera para o QR da NFC-e (10–15 cm de distância, boa luz). Se a SEFAZ permitir, os itens aparecem para revisão.</p>
                   {qrOpen && (
                     <div className="overflow-hidden rounded-2xl border border-slate-200">
                       <QrScanner 
@@ -783,11 +789,31 @@ export default function App() {
                           fetchFromQr(result);
                         }}
                         onError={() => setQrError('Erro ao acessar câmera ou ler QR.')}
-                        constraints={{ facingMode: 'environment' }}
-                        className="w-full h-48"
+                        constraints={{ facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, aspectRatio: { ideal: 1.777 } }}
+                        className="w-full h-56"
+                        scanDelay={400}
                       />
                     </div>
                   )}
+                  <div className="mt-3 space-y-2">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Ou cole a URL do QR</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        value={qrManualUrl}
+                        onChange={(e) => setQrManualUrl(e.target.value)}
+                        placeholder="https://.../nfce..."
+                        className="flex-1 px-3 py-2 text-sm bg-slate-100 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                      />
+                      <button 
+                        onClick={() => qrManualUrl && fetchFromQr(qrManualUrl)}
+                        className="px-3 py-2 text-xs font-bold text-white bg-indigo-600 rounded-xl shadow hover:bg-indigo-700 disabled:opacity-50"
+                        disabled={!qrManualUrl}
+                      >
+                        Buscar
+                      </button>
+                    </div>
+                  </div>
                   {qrStatus === 'fetching' && (
                     <div className="text-xs text-indigo-700 font-semibold mt-2">Buscando itens na nota...</div>
                   )}
