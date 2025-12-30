@@ -297,17 +297,32 @@ export default function App() {
       <header className={`sticky top-0 z-40 bg-indigo-600 text-white shadow-md pt-safe transition-all duration-200 ${isCondensed ? 'p-3' : 'p-4'}`}>
         <div className="flex justify-between items-center mb-2">
           <h1 className={`font-bold tracking-tight ${isCondensed ? 'text-lg' : 'text-xl'}`}>Quanto Vai Dar?</h1>
-          <button 
-            onClick={() => setCurrentView(currentView === 'bag' ? 'departments' : 'bag')}
-            className="relative p-2"
-          >
-            <ShoppingBag size={24} />
-            {bag.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-indigo-600">
-                {bag.length}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setCurrentView(currentView === 'history' ? 'departments' : 'history')}
+              className={`relative p-2 rounded-xl ${currentView === 'history' ? 'bg-indigo-500/30 text-white' : ''}`}
+              title="Histórico"
+            >
+              <Clock3 size={22} />
+              {purchases.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full px-1.5 py-[2px] border border-indigo-500/30">
+                  {purchases.length}
+                </span>
+              )}
+            </button>
+            <button 
+              onClick={() => setCurrentView(currentView === 'bag' ? 'departments' : 'bag')}
+              className={`relative p-2 rounded-xl ${currentView === 'bag' ? 'bg-indigo-500/30 text-white' : ''}`}
+              title="Sacola"
+            >
+              <ShoppingBag size={24} />
+              {bag.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-indigo-600">
+                  {bag.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
         <div className="flex justify-between items-baseline">
           <span className="text-indigo-100 text-sm font-semibold uppercase tracking-wider">Total Estimado</span>
@@ -319,7 +334,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main ref={mainRef} className="flex-1 overflow-y-auto pb-32">
-        {currentView === 'departments' ? (
+        {currentView === 'departments' && (
           <div className="animate-in fade-in duration-300">
             {/* Search */}
             <div className="p-4">
@@ -411,7 +426,9 @@ export default function App() {
               )}
             </div>
           </div>
-        ) : (
+        )}
+
+        {currentView === 'bag' && (
           <div className="animate-in slide-in-from-right duration-300 p-4">
             <div className="flex items-center gap-2 mb-6">
               <button 
@@ -539,7 +556,7 @@ export default function App() {
                               <div className="text-xs text-slate-500 text-right">
                                 <div>Subtotal</div>
                                 <div className="font-bold text-lg text-slate-900">
-                                  {(item.unitPrice * item.quantity).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  {getItemTotal(item).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </div>
                               </div>
                               <button 
@@ -574,89 +591,100 @@ export default function App() {
                 </div>
               </div>
             )}
+          </div>
+        )}
 
-            {/* Histórico e dashboards */}
-            <div className="mt-8 space-y-4">
-              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Resumo ao longo do tempo</div>
-                    <div className="text-lg font-black text-slate-900">Gastos salvos</div>
-                  </div>
-                  <Clock3 className="text-slate-300" size={20} />
+        {currentView === 'history' && (
+          <div className="animate-in slide-in-from-right duration-300 p-4 space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <button 
+                onClick={() => setCurrentView('departments')}
+                className="p-2 -ml-2 text-slate-400 active:text-indigo-600"
+              >
+                <ArrowLeft size={24} />
+              </button>
+              <h2 className="text-2xl font-black text-slate-800">Histórico</h2>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Resumo ao longo do tempo</div>
+                  <div className="text-lg font-black text-slate-900">Gastos salvos</div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-slate-50 rounded-xl p-3">
-                    <div className="text-[11px] text-slate-500 uppercase font-semibold">Total acumulado</div>
-                    <div className="text-lg font-black text-slate-900">{totalSpentAllTime.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                <Clock3 className="text-slate-300" size={20} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="text-[11px] text-slate-500 uppercase font-semibold">Total acumulado</div>
+                  <div className="text-lg font-black text-slate-900">{totalSpentAllTime.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="text-[11px] text-slate-500 uppercase font-semibold">Média por compra</div>
+                  <div className="text-lg font-black text-slate-900">
+                    {purchases.length ? (totalSpentAllTime / purchases.length).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-3">
-                    <div className="text-[11px] text-slate-500 uppercase font-semibold">Média por compra</div>
-                    <div className="text-lg font-black text-slate-900">
-                      {purchases.length ? (totalSpentAllTime / purchases.length).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-3">
-                    <div className="text-[11px] text-slate-500 uppercase font-semibold">Últimos 30 dias</div>
-                    <div className="text-lg font-black text-slate-900">{last30DaysSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                  </div>
-                  <div className="bg-slate-50 rounded-xl p-3">
-                    <div className="text-[11px] text-slate-500 uppercase font-semibold">Maior gasto histórico</div>
-                    <div className="text-lg font-black text-slate-900">
-                      {topHistoricalDept ? `${topHistoricalDept[0]} · ${topHistoricalDept[1].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : '—'}
-                    </div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="text-[11px] text-slate-500 uppercase font-semibold">Últimos 30 dias</div>
+                  <div className="text-lg font-black text-slate-900">{last30DaysSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <div className="text-[11px] text-slate-500 uppercase font-semibold">Maior gasto histórico</div>
+                  <div className="text-lg font-black text-slate-900">
+                    {topHistoricalDept ? `${topHistoricalDept[0]} · ${topHistoricalDept[1].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : '—'}
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Compras salvas</div>
-                    <div className="text-lg font-black text-slate-900">Histórico</div>
-                  </div>
-                  <span className="text-xs text-slate-500">{purchases.length} salva(s)</span>
+            <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Compras salvas</div>
+                  <div className="text-lg font-black text-slate-900">Histórico</div>
                 </div>
-                {sortedPurchases.length === 0 ? (
-                  <p className="text-sm text-slate-500">Nenhuma compra salva ainda.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {sortedPurchases.slice(0, 5).map((purchase) => {
-                      const date = new Date(purchase.createdAt);
-                      const topDept = (() => {
-                        const totals: Record<string, number> = {};
-                        purchase.items.forEach(item => {
-                          const amt = getItemTotal(item);
-                          totals[item.department] = (totals[item.department] ?? 0) + amt;
-                        });
-                        const entries = Object.entries(totals);
-                        if (!entries.length) return null;
-                        return entries.reduce((max, curr) => curr[1] > max[1] ? curr : max);
-                      })();
-                      return (
-                        <div key={purchase.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-sm font-bold text-slate-800">
-                                {date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                              </div>
-                              <div className="text-[11px] text-slate-500 uppercase font-semibold">
-                                {purchase.items.length} item(s){topDept ? ` · Mais gasto: ${topDept[0]}` : ''}
-                              </div>
+                <span className="text-xs text-slate-500">{purchases.length} salva(s)</span>
+              </div>
+              {sortedPurchases.length === 0 ? (
+                <p className="text-sm text-slate-500">Nenhuma compra salva ainda.</p>
+              ) : (
+                <div className="space-y-3">
+                  {sortedPurchases.slice(0, 10).map((purchase) => {
+                    const date = new Date(purchase.createdAt);
+                    const topDept = (() => {
+                      const totals: Record<string, number> = {};
+                      purchase.items.forEach(item => {
+                        const amt = getItemTotal(item);
+                        totals[item.department] = (totals[item.department] ?? 0) + amt;
+                      });
+                      const entries = Object.entries(totals);
+                      if (!entries.length) return null;
+                      return entries.reduce((max, curr) => curr[1] > max[1] ? curr : max);
+                    })();
+                    return (
+                      <div key={purchase.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-bold text-slate-800">
+                              {date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </div>
-                            <div className="text-lg font-black text-slate-900">
-                              {purchase.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            <div className="text-[11px] text-slate-500 uppercase font-semibold">
+                              {purchase.items.length} item(s){topDept ? ` · Mais gasto: ${topDept[0]}` : ''}
                             </div>
                           </div>
+                          <div className="text-lg font-black text-slate-900">
+                            {purchase.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </div>
                         </div>
-                      );
-                    })}
-                    {sortedPurchases.length > 5 && (
-                      <p className="text-[11px] text-slate-500">Mostrando últimas 5. Mais antigas continuam salvas.</p>
-                    )}
-                  </div>
-                )}
-              </div>
+                      </div>
+                    );
+                  })}
+                  {sortedPurchases.length > 10 && (
+                    <p className="text-[11px] text-slate-500">Mostrando últimas 10. Mais antigas continuam salvas.</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

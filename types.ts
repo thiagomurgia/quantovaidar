@@ -21,4 +21,4 @@ export interface Purchase {
   total: number;
 }
 
-export type ViewState = 'departments' | 'bag';
+export type ViewState = 'departments' | 'bag' | 'history';
