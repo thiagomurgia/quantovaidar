@@ -14,4 +14,11 @@ export interface DepartmentData {
   [key: string]: string[];
 }
 
+export interface Purchase {
+  id: string;
+  createdAt: number;
+  items: BagItem[];
+  total: number;
+}
+
 export type ViewState = 'departments' | 'bag';

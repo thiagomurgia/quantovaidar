@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, ShoppingBag, Plus, Trash2, ArrowLeft, X, Pencil, Minus } from 'lucide-react';
-import { BagItem, ViewState } from './types';
+import { Search, ShoppingBag, Plus, Trash2, ArrowLeft, X, Pencil, Minus, Save, Clock3 } from 'lucide-react';
+import { BagItem, ViewState, Purchase } from './types';
 import { DEPARTMENTS, PRODUCTS } from './constants';
 
 const WEIGHT_KEYWORDS = [
@@ -26,6 +26,8 @@ export default function App() {
   const [showBanner, setShowBanner] = useState(true);
   const [isCondensed, setIsCondensed] = useState(false);
   const mainRef = useRef<HTMLDivElement | null>(null);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [saveMessage, setSaveMessage] = useState('');
 
   const getItemTotal = (item: BagItem) => {
     if (item.pricingType === 'weight') {
@@ -47,22 +49,44 @@ export default function App() {
     const hintSeen = localStorage.getItem('qv_hint_dismissed');
     setShowHint(!hintSeen);
 
+    const normalizeItem = (item: any): BagItem => ({
+      id: item.id ?? crypto.randomUUID(),
+      name: item.name ?? 'Item',
+      department: item.department ?? 'Outros',
+      unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : (typeof item.price === 'number' ? item.price : 0),
+      quantity: item.quantity && item.quantity > 0 ? item.quantity : 1,
+      pricingType: item.pricingType === 'weight' ? 'weight' : 'unit',
+      weightGrams: item.pricingType === 'weight' ? (item.weightGrams ?? 0) : undefined,
+      timestamp: item.timestamp ?? Date.now()
+    });
+
     if (savedBag) {
       try {
         const parsed = JSON.parse(savedBag);
-        const normalized: BagItem[] = Array.isArray(parsed) ? parsed.map((item: any) => ({
-          id: item.id ?? crypto.randomUUID(),
-          name: item.name ?? 'Item',
-          department: item.department ?? 'Outros',
-          unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : (typeof item.price === 'number' ? item.price : 0),
-          quantity: item.quantity && item.quantity > 0 ? item.quantity : 1,
-          pricingType: item.pricingType === 'weight' ? 'weight' : 'unit',
-          weightGrams: item.pricingType === 'weight' ? (item.weightGrams ?? 0) : undefined,
-          timestamp: item.timestamp ?? Date.now()
-        })).filter((item: BagItem) => item.unitPrice >= 0) : [];
+        const normalized: BagItem[] = Array.isArray(parsed) ? parsed.map(normalizeItem).filter((item: BagItem) => item.unitPrice >= 0) : [];
         setBag(normalized);
       } catch (e) {
         console.error("Error loading bag", e);
+      }
+    }
+
+    const savedPurchases = localStorage.getItem('qv_purchases');
+    if (savedPurchases) {
+      try {
+        const parsed = JSON.parse(savedPurchases);
+        const normalizedPurchases: Purchase[] = Array.isArray(parsed) ? parsed.map((purchase: any) => {
+          const items = Array.isArray(purchase.items) ? purchase.items.map(normalizeItem) : [];
+          const computedTotal = items.reduce((acc, item) => acc + getItemTotal(item), 0);
+          return {
+            id: purchase.id ?? crypto.randomUUID(),
+            createdAt: purchase.createdAt ?? Date.now(),
+            items,
+            total: typeof purchase.total === 'number' ? purchase.total : computedTotal
+          };
+        }) : [];
+        setPurchases(normalizedPurchases);
+      } catch (e) {
+        console.error('Error loading purchases', e);
       }
     }
   }, []);
@@ -70,6 +94,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('qv_bag', JSON.stringify(bag));
   }, [bag]);
+
+  useEffect(() => {
+    localStorage.setItem('qv_purchases', JSON.stringify(purchases));
+  }, [purchases]);
 
   const total = useMemo(() => {
     return bag.reduce((acc, item) => acc + getItemTotal(item), 0);
@@ -82,6 +110,12 @@ export default function App() {
     node.addEventListener('scroll', onScroll);
     return () => node.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    if (!saveMessage) return;
+    const timer = setTimeout(() => setSaveMessage(''), 2500);
+    return () => clearTimeout(timer);
+  }, [saveMessage]);
 
   const filteredProducts = useMemo(() => {
     if (searchQuery.trim()) {
@@ -104,6 +138,34 @@ export default function App() {
   const modalSubtotal = isWeightMode 
     ? basePrice * (weightInput / 1000) * quantityInput
     : basePrice * quantityInput;
+
+  const sortedPurchases = useMemo(() => {
+    return [...purchases].sort((a, b) => b.createdAt - a.createdAt);
+  }, [purchases]);
+
+  const totalSpentAllTime = useMemo(() => purchases.reduce((acc, purchase) => acc + purchase.total, 0), [purchases]);
+
+  const last30DaysSpent = useMemo(() => {
+    const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    return purchases.filter(p => p.createdAt >= cutoff).reduce((acc, purchase) => acc + purchase.total, 0);
+  }, [purchases]);
+
+  const historicalDeptTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    purchases.forEach(purchase => {
+      purchase.items.forEach(item => {
+        const amt = getItemTotal(item);
+        totals[item.department] = (totals[item.department] ?? 0) + amt;
+      });
+    });
+    return totals;
+  }, [purchases]);
+
+  const topHistoricalDept = useMemo(() => {
+    const entries = Object.entries(historicalDeptTotals);
+    if (!entries.length) return null;
+    return entries.reduce((max, current) => current[1] > max[1] ? current : max);
+  }, [historicalDeptTotals]);
 
   const groupedBag = useMemo(() => {
     const groups: Record<string, BagItem[]> = {};
@@ -157,6 +219,20 @@ export default function App() {
       const nextQuantity = Math.max(1, item.quantity + delta);
       return { ...item, quantity: nextQuantity, timestamp: Date.now() };
     }));
+  };
+
+  const savePurchase = () => {
+    if (bag.length === 0) return;
+    const newPurchase: Purchase = {
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+      items: bag,
+      total
+    };
+    setPurchases(prev => [newPurchase, ...prev]);
+    setBag([]);
+    setCurrentView('departments');
+    setSaveMessage('Compra salva no histórico');
   };
 
   const closeModal = () => {
@@ -347,6 +423,12 @@ export default function App() {
               <h2 className="text-2xl font-black text-slate-800">Sua Sacola</h2>
             </div>
 
+            {saveMessage && (
+              <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-100 text-emerald-800 font-semibold rounded-2xl">
+                {saveMessage}
+              </div>
+            )}
+
             {bag.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-slate-300">
                 <ShoppingBag size={80} className="mb-4 opacity-20" />
@@ -474,15 +556,108 @@ export default function App() {
                   </div>
                 ))}
                 
-                <button 
-                  onClick={clearBag}
-                  className="w-full flex items-center justify-center gap-2 py-4 mt-2 text-red-500 font-bold border-2 border-dashed border-red-200 rounded-2xl active:bg-red-50"
-                >
-                  <Trash2 size={18} />
-                  Limpar sacola
-                </button>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button 
+                    onClick={savePurchase}
+                    className="w-full flex items-center justify-center gap-2 py-4 text-white font-bold bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-transform"
+                  >
+                    <Save size={18} />
+                    Salvar compra
+                  </button>
+                  <button 
+                    onClick={clearBag}
+                    className="w-full flex items-center justify-center gap-2 py-4 text-red-500 font-bold border-2 border-dashed border-red-200 rounded-2xl active:bg-red-50"
+                  >
+                    <Trash2 size={18} />
+                    Limpar sacola
+                  </button>
+                </div>
               </div>
             )}
+
+            {/* Histórico e dashboards */}
+            <div className="mt-8 space-y-4">
+              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Resumo ao longo do tempo</div>
+                    <div className="text-lg font-black text-slate-900">Gastos salvos</div>
+                  </div>
+                  <Clock3 className="text-slate-300" size={20} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-slate-50 rounded-xl p-3">
+                    <div className="text-[11px] text-slate-500 uppercase font-semibold">Total acumulado</div>
+                    <div className="text-lg font-black text-slate-900">{totalSpentAllTime.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3">
+                    <div className="text-[11px] text-slate-500 uppercase font-semibold">Média por compra</div>
+                    <div className="text-lg font-black text-slate-900">
+                      {purchases.length ? (totalSpentAllTime / purchases.length).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3">
+                    <div className="text-[11px] text-slate-500 uppercase font-semibold">Últimos 30 dias</div>
+                    <div className="text-lg font-black text-slate-900">{last30DaysSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                  </div>
+                  <div className="bg-slate-50 rounded-xl p-3">
+                    <div className="text-[11px] text-slate-500 uppercase font-semibold">Maior gasto histórico</div>
+                    <div className="text-lg font-black text-slate-900">
+                      {topHistoricalDept ? `${topHistoricalDept[0]} · ${topHistoricalDept[1].toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : '—'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Compras salvas</div>
+                    <div className="text-lg font-black text-slate-900">Histórico</div>
+                  </div>
+                  <span className="text-xs text-slate-500">{purchases.length} salva(s)</span>
+                </div>
+                {sortedPurchases.length === 0 ? (
+                  <p className="text-sm text-slate-500">Nenhuma compra salva ainda.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {sortedPurchases.slice(0, 5).map((purchase) => {
+                      const date = new Date(purchase.createdAt);
+                      const topDept = (() => {
+                        const totals: Record<string, number> = {};
+                        purchase.items.forEach(item => {
+                          const amt = getItemTotal(item);
+                          totals[item.department] = (totals[item.department] ?? 0) + amt;
+                        });
+                        const entries = Object.entries(totals);
+                        if (!entries.length) return null;
+                        return entries.reduce((max, curr) => curr[1] > max[1] ? curr : max);
+                      })();
+                      return (
+                        <div key={purchase.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-bold text-slate-800">
+                                {date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </div>
+                              <div className="text-[11px] text-slate-500 uppercase font-semibold">
+                                {purchase.items.length} item(s){topDept ? ` · Mais gasto: ${topDept[0]}` : ''}
+                              </div>
+                            </div>
+                            <div className="text-lg font-black text-slate-900">
+                              {purchase.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {sortedPurchases.length > 5 && (
+                      <p className="text-[11px] text-slate-500">Mostrando últimas 5. Mais antigas continuam salvas.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>
