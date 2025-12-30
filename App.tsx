@@ -369,6 +369,38 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-5">
+                {/* Spend breakdown */}
+                <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest">Onde você está gastando</h3>
+                    <span className="text-[11px] text-indigo-700 font-semibold">Total {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {groupedBag.map(group => {
+                      const percent = total > 0 ? Math.round((group.subtotal / total) * 100) : 0;
+                      return (
+                        <div key={`chart-${group.dept}`}>
+                          <div className="flex justify-between text-[12px] font-semibold text-indigo-900 mb-1">
+                            <span>{group.dept}</span>
+                            <span>{group.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · {percent}%</span>
+                          </div>
+                          <div className="w-full h-3 bg-white rounded-full overflow-hidden border border-indigo-100">
+                            <div 
+                              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 rounded-full transition-all" 
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {groupedBag[0] && (
+                    <p className="text-[11px] text-indigo-800 mt-3">
+                      Dica: tente reduzir {groupedBag[0].dept} em 10% para baixar o total.
+                    </p>
+                  )}
+                </div>
+
                 {groupedBag.map(group => (
                   <div key={group.dept} className="space-y-2">
                     <div className="flex items-center justify-between px-1">
