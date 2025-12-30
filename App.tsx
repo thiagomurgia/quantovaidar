@@ -569,211 +569,213 @@ export default function App() {
               </div>
             )}
 
-            {bag.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-300">
-                <ShoppingBag size={80} className="mb-4 opacity-20" />
-                <p className="text-lg font-bold text-slate-500">Sacola vazia</p>
-                <p className="text-sm text-slate-400 text-center mt-1 px-6">Busque ou escolha um departamento, adicione preços e acompanhe o total aqui.</p>
-                <div className="flex gap-3 mt-4">
+            <div className="space-y-5">
+              <div className="p-4 bg-white border border-indigo-100 rounded-2xl shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-xs font-semibold text-indigo-500 uppercase tracking-widest">OCR beta</div>
+                    <div className="text-lg font-black text-slate-900">Importar nota/etiqueta</div>
+                  </div>
                   <button 
-                    onClick={() => setCurrentView('departments')}
-                    className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg shadow hover:bg-indigo-700 disabled:opacity-60"
+                    disabled={ocrLoading}
                   >
-                    Começar
+                    {ocrLoading ? 'Lendo...' : 'Escolher foto'}
                   </button>
-                  <button 
-                    onClick={() => { setShowHint(true); localStorage.removeItem('qv_hint_dismissed'); }}
-                    className="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-100"
-                  >
-                    Ver dicas
-                  </button>
+                  <input 
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={(e) => handleOcrFile(e.target.files?.[0] ?? null)}
+                  />
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                <div className="p-4 bg-white border border-indigo-100 rounded-2xl shadow-sm">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="text-xs font-semibold text-indigo-500 uppercase tracking-widest">OCR beta</div>
-                      <div className="text-lg font-black text-slate-900">Importar nota/etiqueta</div>
+                <p className="text-xs text-slate-500 mb-2">Tire foto clara da nota ou etiqueta. Os itens identificados aparecem abaixo para revisão.</p>
+                {ocrError && (
+                  <div className="text-xs text-red-600 font-semibold">{ocrError}</div>
+                )}
+                {ocrCandidates.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-semibold text-slate-500 uppercase">Itens sugeridos ({ocrCandidates.length})</div>
+                      <button 
+                        onClick={addAllOcrCandidates}
+                        className="text-xs font-bold text-indigo-700"
+                      >
+                        Adicionar todos
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg shadow hover:bg-indigo-700 disabled:opacity-60"
-                      disabled={ocrLoading}
-                    >
-                      {ocrLoading ? 'Lendo...' : 'Escolher foto'}
-                    </button>
-                    <input 
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      ref={fileInputRef}
-                      onChange={(e) => handleOcrFile(e.target.files?.[0] ?? null)}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 mb-2">Tire foto clara da nota ou etiqueta. Os itens identificados aparecem abaixo para revisão.</p>
-                  {ocrError && (
-                    <div className="text-xs text-red-600 font-semibold">{ocrError}</div>
-                  )}
-                  {ocrCandidates.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-semibold text-slate-500 uppercase">Itens sugeridos ({ocrCandidates.length})</div>
-                        <button 
-                          onClick={addAllOcrCandidates}
-                          className="text-xs font-bold text-indigo-700"
-                        >
-                          Adicionar todos
-                        </button>
-                      </div>
-                      <div className="max-h-60 overflow-y-auto space-y-2">
-                        {ocrCandidates.map((cand, idx) => (
-                          <div key={`${cand.name}-${idx}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                            <div>
-                              <div className="text-sm font-bold text-slate-800">{cand.name}</div>
-                              <div className="text-xs text-slate-500">{cand.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                            </div>
-                            <button 
-                              onClick={() => addOcrCandidateToBag(cand)}
-                              className="px-2 py-1 text-xs font-bold text-indigo-700 bg-white border border-indigo-100 rounded-lg"
-                            >
-                              Adicionar
-                            </button>
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {ocrCandidates.map((cand, idx) => (
+                        <div key={`${cand.name}-${idx}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                          <div>
+                            <div className="text-sm font-bold text-slate-800">{cand.name}</div>
+                            <div className="text-xs text-slate-500">{cand.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {ocrLoading && (
-                    <div className="text-xs text-indigo-700 font-semibold mt-2">Lendo imagem...</div>
-                  )}
-                </div>
-
-                {/* Spend breakdown */}
-                <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest">Onde você está gastando</h3>
-                    <span className="text-[11px] text-indigo-700 font-semibold">Total {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {groupedBag.map(group => {
-                      const percent = total > 0 ? Math.round((group.subtotal / total) * 100) : 0;
-                      return (
-                        <div key={`chart-${group.dept}`}>
-                          <div className="flex justify-between text-[12px] font-semibold text-indigo-900 mb-1">
-                            <span>{group.dept}</span>
-                            <span>{group.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · {percent}%</span>
-                          </div>
-                          <div className="w-full h-3 bg-white rounded-full overflow-hidden border border-indigo-100">
-                            <div 
-                              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 rounded-full transition-all" 
-                              style={{ width: `${percent}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {topCurrentGroup && (
-                    <p className="text-[11px] text-indigo-800 mt-3">
-                      Dica: {topCurrentGroup[0]} responde por {total > 0 ? Math.round((topCurrentGroup[1] / total) * 100) : 0}% — reduzir 10% aqui já corta o total.
-                    </p>
-                  )}
-                </div>
-
-                {groupedBag.map(group => (
-                  <div key={group.dept} className="space-y-2">
-                    <div className="flex items-center justify-between px-1">
-                      <div className="text-xs text-slate-400 font-semibold uppercase tracking-widest">{group.dept}</div>
-                      <div className="text-sm font-black text-slate-600">
-                        {group.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      {group.items.map(item => (
-                        <div 
-                          key={item.id} 
-                          className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <h3 className="font-bold text-slate-800 text-lg leading-tight">{item.name}</h3>
-                              {item.pricingType === 'weight' ? (
-                                <p className="text-xs text-slate-400 font-semibold uppercase">
-                                  R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg · {(item.weightGrams ?? 0).toLocaleString('pt-BR')} g ({((item.weightGrams ?? 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg)
-                                </p>
-                              ) : (
-                                <p className="text-xs text-slate-400 font-semibold uppercase">
-                                  R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por unidade
-                                </p>
-                              )}
-                            </div>
-                            <button 
-                              onClick={() => handleEditItem(item)}
-                              className="p-2 text-slate-300 hover:text-indigo-600"
-                            >
-                              <Pencil size={18} />
-                            </button>
-                          </div>
-                          <div className="flex items-center justify-between mt-4 gap-4">
-                            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">
-                              <button 
-                                onClick={() => updateQuantity(item.id, -1)}
-                                className="p-2 text-slate-500 hover:text-indigo-600"
-                                aria-label="Diminuir quantidade"
-                              >
-                                <Minus size={16} />
-                              </button>
-                              <span className="min-w-[28px] text-center font-bold text-slate-800">{item.quantity}</span>
-                              <button 
-                                onClick={() => updateQuantity(item.id, 1)}
-                                className="p-2 text-indigo-600 hover:text-indigo-800"
-                                aria-label="Aumentar quantidade"
-                              >
-                                <Plus size={16} />
-                              </button>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-xs text-slate-500 text-right">
-                                <div>Subtotal</div>
-                                <div className="font-bold text-lg text-slate-900">
-                                  {getItemTotal(item).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </div>
-                              </div>
-                              <button 
-                                onClick={() => removeItem(item.id)}
-                                className="p-2 text-red-100 bg-red-50 rounded-xl active:bg-red-500 active:text-white transition-colors"
-                              >
-                                <Trash2 size={20} />
-                              </button>
-                            </div>
-                          </div>
+                          <button 
+                            onClick={() => addOcrCandidateToBag(cand)}
+                            className="px-2 py-1 text-xs font-bold text-indigo-700 bg-white border border-indigo-100 rounded-lg"
+                          >
+                            Adicionar
+                          </button>
                         </div>
                       ))}
                     </div>
                   </div>
-                ))}
-                
-                <div className="grid grid-cols-2 gap-3 mt-2">
-                  <button 
-                    onClick={savePurchase}
-                    className="w-full flex items-center justify-center gap-2 py-4 text-white font-bold bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-transform"
-                  >
-                    <Save size={18} />
-                    Salvar compra
-                  </button>
-                  <button 
-                    onClick={clearBag}
-                    className="w-full flex items-center justify-center gap-2 py-4 text-red-500 font-bold border-2 border-dashed border-red-200 rounded-2xl active:bg-red-50"
-                  >
-                    <Trash2 size={18} />
-                    Limpar sacola
-                  </button>
-                </div>
+                )}
+                {ocrLoading && (
+                  <div className="text-xs text-indigo-700 font-semibold mt-2">Lendo imagem...</div>
+                )}
               </div>
-            )}
+
+              {bag.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+                  <ShoppingBag size={80} className="mb-4 opacity-20" />
+                  <p className="text-lg font-bold text-slate-500">Sacola vazia</p>
+                  <p className="text-sm text-slate-400 text-center mt-1 px-6">Busque ou escolha um departamento, adicione preços e acompanhe o total aqui.</p>
+                  <div className="flex gap-3 mt-4">
+                    <button 
+                      onClick={() => setCurrentView('departments')}
+                      className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl"
+                    >
+                      Começar
+                    </button>
+                    <button 
+                      onClick={() => { setShowHint(true); localStorage.removeItem('qv_hint_dismissed'); }}
+                      className="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-100"
+                    >
+                      Ver dicas
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* Spend breakdown */}
+                  <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest">Onde você está gastando</h3>
+                      <span className="text-[11px] text-indigo-700 font-semibold">Total {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {groupedBag.map(group => {
+                        const percent = total > 0 ? Math.round((group.subtotal / total) * 100) : 0;
+                        return (
+                          <div key={`chart-${group.dept}`}>
+                            <div className="flex justify-between text-[12px] font-semibold text-indigo-900 mb-1">
+                              <span>{group.dept}</span>
+                              <span>{group.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · {percent}%</span>
+                            </div>
+                            <div className="w-full h-3 bg-white rounded-full overflow-hidden border border-indigo-100">
+                              <div 
+                                className="h-full bg-gradient-to-r from-indigo-500 to-indigo-700 rounded-full transition-all" 
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {topCurrentGroup && (
+                      <p className="text-[11px] text-indigo-800 mt-3">
+                        Dica: {topCurrentGroup[0]} responde por {total > 0 ? Math.round((topCurrentGroup[1] / total) * 100) : 0}% — reduzir 10% aqui já corta o total.
+                      </p>
+                    )}
+                  </div>
+
+                  {groupedBag.map(group => (
+                    <div key={group.dept} className="space-y-2">
+                      <div className="flex items-center justify-between px-1">
+                        <div className="text-xs text-slate-400 font-semibold uppercase tracking-widest">{group.dept}</div>
+                        <div className="text-sm font-black text-slate-600">
+                          {group.subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {group.items.map(item => (
+                          <div 
+                            key={item.id} 
+                            className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h3 className="font-bold text-slate-800 text-lg leading-tight">{item.name}</h3>
+                                {item.pricingType === 'weight' ? (
+                                  <p className="text-xs text-slate-400 font-semibold uppercase">
+                                    R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg · {(item.weightGrams ?? 0).toLocaleString('pt-BR')} g ({((item.weightGrams ?? 0) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg)
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-slate-400 font-semibold uppercase">
+                                    R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por unidade
+                                  </p>
+                                )}
+                              </div>
+                              <button 
+                                onClick={() => handleEditItem(item)}
+                                className="p-2 text-slate-300 hover:text-indigo-600"
+                              >
+                                <Pencil size={18} />
+                              </button>
+                            </div>
+                            <div className="flex items-center justify-between mt-4 gap-4">
+                              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">
+                                <button 
+                                  onClick={() => updateQuantity(item.id, -1)}
+                                  className="p-2 text-slate-500 hover:text-indigo-600"
+                                  aria-label="Diminuir quantidade"
+                                >
+                                  <Minus size={16} />
+                                </button>
+                                <span className="min-w-[28px] text-center font-bold text-slate-800">{item.quantity}</span>
+                                <button 
+                                  onClick={() => updateQuantity(item.id, 1)}
+                                  className="p-2 text-indigo-600 hover:text-indigo-800"
+                                  aria-label="Aumentar quantidade"
+                                >
+                                  <Plus size={16} />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="text-xs text-slate-500 text-right">
+                                  <div>Subtotal</div>
+                                  <div className="font-bold text-lg text-slate-900">
+                                    {getItemTotal(item).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  </div>
+                                </div>
+                                <button 
+                                  onClick={() => removeItem(item.id)}
+                                  className="p-2 text-red-100 bg-red-50 rounded-xl active:bg-red-500 active:text-white transition-colors"
+                                >
+                                  <Trash2 size={20} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    <button 
+                      onClick={savePurchase}
+                      className="w-full flex items-center justify-center gap-2 py-4 text-white font-bold bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-transform"
+                    >
+                      <Save size={18} />
+                      Salvar compra
+                    </button>
+                    <button 
+                      onClick={clearBag}
+                      className="w-full flex items-center justify-center gap-2 py-4 text-red-500 font-bold border-2 border-dashed border-red-200 rounded-2xl active:bg-red-50"
+                    >
+                      <Trash2 size={18} />
+                      Limpar sacola
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
