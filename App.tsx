@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, ShoppingBag, Plus, Trash2, ArrowLeft, X, Pencil, Minus, Save, Clock3, BarChart3 } from 'lucide-react';
+import { Scanner as QrScanner } from '@yudiel/react-qr-scanner';
 import { BagItem, ViewState, Purchase } from './types';
 import { DEPARTMENTS, PRODUCTS } from './constants';
 
@@ -33,6 +34,16 @@ export default function App() {
   const [ocrCandidates, setOcrCandidates] = useState<{ name: string; price: number }[]>([]);
   const [ocrError, setOcrError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrStatus, setQrStatus] = useState<'idle' | 'fetching' | 'ok' | 'error'>('idle');
+  const [qrError, setQrError] = useState('');
+  const [qrCandidates, setQrCandidates] = useState<{
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    pricingType: 'unit' | 'weight';
+    weightGrams?: number;
+  }[]>([]);
 
   const getItemTotal = (item: BagItem) => {
     if (item.pricingType === 'weight') {
@@ -203,6 +214,126 @@ export default function App() {
     if (editingPurchase?.id === id) {
       setEditingPurchase(null);
     }
+  };
+
+  const parseNfceText = (text: string) => {
+    const parsed: {
+      name: string;
+      unitPrice: number;
+      quantity: number;
+      pricingType: 'unit' | 'weight';
+      weightGrams?: number;
+    }[] = [];
+
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, 'application/xml');
+    const detNodes = Array.from(xml.getElementsByTagName('det'));
+    detNodes.forEach(det => {
+      const prod = det.getElementsByTagName('prod')[0];
+      if (!prod) return;
+      const getText = (tag: string) => prod.getElementsByTagName(tag)[0]?.textContent ?? '';
+      const name = getText('xProd').trim() || 'Item';
+      const uCom = getText('uCom').toUpperCase();
+      const qComRaw = getText('qCom').replace(',', '.');
+      const vUnRaw = getText('vUnCom').replace(',', '.');
+      const vProdRaw = getText('vProd').replace(',', '.');
+      const qty = parseFloat(qComRaw) || 1;
+      const unitPrice = parseFloat(vUnRaw);
+      const totalLine = parseFloat(vProdRaw);
+      const price = !isNaN(unitPrice) ? unitPrice : (!isNaN(totalLine) && qty ? totalLine / qty : 0);
+      if (price <= 0) return;
+      if (uCom.includes('KG')) {
+        parsed.push({
+          name,
+          unitPrice: price,
+          quantity: 1,
+          pricingType: 'weight',
+          weightGrams: Math.round(qty * 1000)
+        });
+      } else {
+        parsed.push({
+          name,
+          unitPrice: price,
+          quantity: Math.max(1, Math.round(qty)),
+          pricingType: 'unit'
+        });
+      }
+    });
+
+    if (parsed.length > 0) return parsed;
+
+    // HTML fallback: look for lines with currency at end
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    lines.forEach(line => {
+      const match = line.match(/(.+?)\s+([0-9]+[.,][0-9]{2})$/);
+      if (!match) return;
+      const name = match[1].replace(/[^A-Za-zÀ-ÿ0-9\s]/g, '').trim();
+      const price = parseFloat(match[2].replace(',', '.'));
+      if (!name || isNaN(price) || price <= 0) return;
+      parsed.push({
+        name,
+        unitPrice: price,
+        quantity: 1,
+        pricingType: 'unit'
+      });
+    });
+
+    return parsed;
+  };
+
+  const fetchFromQr = async (url: string) => {
+    setQrStatus('fetching');
+    setQrError('');
+    setQrCandidates([]);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const items = parseNfceText(text);
+      if (!items || items.length === 0) throw new Error('Itens não identificados');
+      setQrCandidates(items.slice(0, 30));
+      setQrStatus('ok');
+    } catch (err) {
+      console.error('QR fetch error', err);
+      setQrStatus('error');
+      setQrError('Não foi possível ler os itens da nota (possível bloqueio CORS da SEFAZ).');
+    }
+  };
+
+  const addQrItemToBag = (item: {
+    name: string;
+    unitPrice: number;
+    quantity: number;
+    pricingType: 'unit' | 'weight';
+    weightGrams?: number;
+  }) => {
+    const newItem: BagItem = {
+      id: crypto.randomUUID(),
+      name: item.name,
+      department: 'Outros',
+      unitPrice: item.unitPrice,
+      quantity: item.pricingType === 'weight' ? 1 : item.quantity,
+      pricingType: item.pricingType,
+      weightGrams: item.pricingType === 'weight' ? item.weightGrams : undefined,
+      timestamp: Date.now()
+    };
+    setBag(prev => [newItem, ...prev]);
+  };
+
+  const addAllQrItems = () => {
+    if (!qrCandidates.length) return;
+    const now = Date.now();
+    const mapped: BagItem[] = qrCandidates.map((item, idx) => ({
+      id: crypto.randomUUID(),
+      name: item.name,
+      department: 'Outros',
+      unitPrice: item.unitPrice,
+      quantity: item.pricingType === 'weight' ? 1 : item.quantity,
+      pricingType: item.pricingType,
+      weightGrams: item.pricingType === 'weight' ? item.weightGrams : undefined,
+      timestamp: now - idx
+    }));
+    setBag(prev => [...mapped, ...prev]);
   };
 
   const parseOcrText = (text: string) => {
@@ -569,11 +700,11 @@ export default function App() {
               </div>
             )}
 
-            <div className="space-y-5">
-              <div className="p-4 bg-white border border-indigo-100 rounded-2xl shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-xs font-semibold text-indigo-500 uppercase tracking-widest">OCR beta</div>
+              <div className="space-y-5">
+                <div className="p-4 bg-white border border-indigo-100 rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-xs font-semibold text-indigo-500 uppercase tracking-widest">OCR beta</div>
                     <div className="text-lg font-black text-slate-900">Importar nota/etiqueta</div>
                   </div>
                   <button 
@@ -628,12 +759,78 @@ export default function App() {
                 {ocrLoading && (
                   <div className="text-xs text-indigo-700 font-semibold mt-2">Lendo imagem...</div>
                 )}
-              </div>
+                </div>
 
-              {bag.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
-                  <ShoppingBag size={80} className="mb-4 opacity-20" />
-                  <p className="text-lg font-bold text-slate-500">Sacola vazia</p>
+                <div className="p-4 bg-white border border-indigo-100 rounded-2xl shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-xs font-semibold text-indigo-500 uppercase tracking-widest">QR NFC-e beta</div>
+                      <div className="text-lg font-black text-slate-900">Ler QR da nota</div>
+                    </div>
+                    <button 
+                      onClick={() => setQrOpen(prev => !prev)}
+                      className="px-3 py-2 text-xs font-bold text-white bg-indigo-600 rounded-lg shadow hover:bg-indigo-700"
+                    >
+                      {qrOpen ? 'Fechar' : 'Escanear'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-2">Aponte a câmera para o QR da NFC-e. Se a SEFAZ permitir, os itens aparecem para revisão.</p>
+                  {qrOpen && (
+                    <div className="overflow-hidden rounded-2xl border border-slate-200">
+                      <QrScanner 
+                        onDecode={(result) => {
+                          setQrOpen(false);
+                          fetchFromQr(result);
+                        }}
+                        onError={() => setQrError('Erro ao acessar câmera ou ler QR.')}
+                        constraints={{ facingMode: 'environment' }}
+                        className="w-full h-48"
+                      />
+                    </div>
+                  )}
+                  {qrStatus === 'fetching' && (
+                    <div className="text-xs text-indigo-700 font-semibold mt-2">Buscando itens na nota...</div>
+                  )}
+                  {qrError && (
+                    <div className="text-xs text-red-600 font-semibold mt-2">{qrError}</div>
+                  )}
+                  {qrCandidates.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-semibold text-slate-500 uppercase">Itens do QR ({qrCandidates.length})</div>
+                        <button 
+                          onClick={addAllQrItems}
+                          className="text-xs font-bold text-indigo-700"
+                        >
+                          Adicionar todos
+                        </button>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto space-y-2">
+                        {qrCandidates.map((cand, idx) => (
+                          <div key={`${cand.name}-${idx}`} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                            <div>
+                              <div className="text-sm font-bold text-slate-800">{cand.name}</div>
+                              <div className="text-xs text-slate-500">
+                                {cand.unitPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} {cand.pricingType === 'weight' ? '/kg' : ''}
+                              </div>
+                            </div>
+                            <button 
+                              onClick={() => addQrItemToBag(cand)}
+                              className="px-2 py-1 text-xs font-bold text-indigo-700 bg-white border border-indigo-100 rounded-lg"
+                            >
+                              Adicionar
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {bag.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+                    <ShoppingBag size={80} className="mb-4 opacity-20" />
+                    <p className="text-lg font-bold text-slate-500">Sacola vazia</p>
                   <p className="text-sm text-slate-400 text-center mt-1 px-6">Busque ou escolha um departamento, adicione preços e acompanhe o total aqui.</p>
                   <div className="flex gap-3 mt-4">
                     <button 
