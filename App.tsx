@@ -4,6 +4,11 @@ import { Search, ShoppingBag, Plus, Trash2, ArrowLeft, X, Pencil, Minus } from '
 import { BagItem, ViewState } from './types';
 import { DEPARTMENTS, PRODUCTS } from './constants';
 
+const WEIGHT_KEYWORDS = [
+  'alho','cebola','tomate','banana','maçã','laranja','limão','mamão','alface','couve','brócolis','abobrinha','pepino','pimentão',
+  'batata','abacate','abacaxi','melão','melancia','uva','manga','pera','pêssego','cenoura','beterraba','morango','goiaba'
+];
+
 export default function App() {
   const [bag, setBag] = useState<BagItem[]>([]);
   const [currentView, setCurrentView] = useState<ViewState>('departments');
@@ -13,12 +18,28 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<{name: string, dept: string} | null>(null);
   const [priceInput, setPriceInput] = useState('');
   const [quantityInput, setQuantityInput] = useState(1);
+  const [weightInput, setWeightInput] = useState(0);
+  const [isWeightMode, setIsWeightMode] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [showHint, setShowHint] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
   const [isCondensed, setIsCondensed] = useState(false);
   const mainRef = useRef<HTMLDivElement | null>(null);
+
+  const getItemTotal = (item: BagItem) => {
+    if (item.pricingType === 'weight') {
+      const grams = item.weightGrams ?? 0;
+      return item.unitPrice * (grams / 1000) * (item.quantity ?? 1);
+    }
+    return item.unitPrice * item.quantity;
+  };
+
+  const shouldUseWeightPricing = (name: string, dept: string) => {
+    if (dept !== 'Hortifruti') return false;
+    const normalized = name.toLowerCase();
+    return WEIGHT_KEYWORDS.some(keyword => normalized.includes(keyword));
+  };
 
   // Local Storage persistence
   useEffect(() => {
@@ -35,6 +56,8 @@ export default function App() {
           department: item.department ?? 'Outros',
           unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : (typeof item.price === 'number' ? item.price : 0),
           quantity: item.quantity && item.quantity > 0 ? item.quantity : 1,
+          pricingType: item.pricingType === 'weight' ? 'weight' : 'unit',
+          weightGrams: item.pricingType === 'weight' ? (item.weightGrams ?? 0) : undefined,
           timestamp: item.timestamp ?? Date.now()
         })).filter((item: BagItem) => item.unitPrice >= 0) : [];
         setBag(normalized);
@@ -49,7 +72,7 @@ export default function App() {
   }, [bag]);
 
   const total = useMemo(() => {
-    return bag.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+    return bag.reduce((acc, item) => acc + getItemTotal(item), 0);
   }, [bag]);
 
   useEffect(() => {
@@ -77,7 +100,10 @@ export default function App() {
   }, [searchQuery, selectedDept]);
 
   const parsedPriceInput = parseFloat(priceInput.replace(',', '.'));
-  const modalSubtotal = (!isNaN(parsedPriceInput) ? parsedPriceInput : 0) * quantityInput;
+  const basePrice = !isNaN(parsedPriceInput) ? parsedPriceInput : 0;
+  const modalSubtotal = isWeightMode 
+    ? basePrice * (weightInput / 1000) * quantityInput
+    : basePrice * quantityInput;
 
   const groupedBag = useMemo(() => {
     const groups: Record<string, BagItem[]> = {};
@@ -98,7 +124,7 @@ export default function App() {
     return orderedDepts.map(dept => ({
       dept,
       items: groups[dept].sort((a, b) => b.timestamp - a.timestamp),
-      subtotal: groups[dept].reduce((acc, item) => acc + item.unitPrice * item.quantity, 0)
+      subtotal: groups[dept].reduce((acc, item) => acc + getItemTotal(item), 0)
     }));
   }, [bag]);
 
@@ -108,6 +134,9 @@ export default function App() {
     setSelectedProduct({ name, dept });
     setPriceInput('');
     setQuantityInput(1);
+    const weightBased = shouldUseWeightPricing(name, dept);
+    setIsWeightMode(weightBased);
+    setWeightInput(weightBased ? 500 : 0);
     setIsPriceModalOpen(true);
   };
 
@@ -117,6 +146,8 @@ export default function App() {
     setSelectedProduct({ name: item.name, dept: item.department });
     setPriceInput(String(item.unitPrice));
     setQuantityInput(item.quantity);
+    setIsWeightMode(item.pricingType === 'weight');
+    setWeightInput(item.pricingType === 'weight' ? (item.weightGrams ?? 0) : 0);
     setIsPriceModalOpen(true);
   };
 
@@ -134,16 +165,26 @@ export default function App() {
     setSelectedItemId(null);
     setPriceInput('');
     setQuantityInput(1);
+    setWeightInput(0);
+    setIsWeightMode(false);
   };
 
   const confirmPrice = () => {
     if (!selectedProduct) return;
     const price = parseFloat(priceInput.replace(',', '.'));
-    if (isNaN(price) || price <= 0 || quantityInput <= 0) return;
+    const hasValidWeight = !isWeightMode || weightInput > 0;
+    if (isNaN(price) || price <= 0 || quantityInput <= 0 || !hasValidWeight) return;
 
     if (modalMode === 'edit' && selectedItemId) {
       setBag(prev => prev.map(item => item.id === selectedItemId 
-        ? { ...item, unitPrice: price, quantity: quantityInput, timestamp: Date.now() }
+        ? { 
+            ...item, 
+            unitPrice: price, 
+            quantity: quantityInput, 
+            pricingType: isWeightMode ? 'weight' : 'unit',
+            weightGrams: isWeightMode ? weightInput : undefined,
+            timestamp: Date.now() 
+          }
         : item
       ));
     } else {
@@ -153,6 +194,8 @@ export default function App() {
         department: selectedProduct.dept,
         unitPrice: price,
         quantity: quantityInput,
+        pricingType: isWeightMode ? 'weight' : 'unit',
+        weightGrams: isWeightMode ? weightInput : undefined,
         timestamp: Date.now()
       };
       setBag(prev => [newItem, ...prev]);
@@ -343,7 +386,15 @@ export default function App() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <h3 className="font-bold text-slate-800 text-lg leading-tight">{item.name}</h3>
-                              <p className="text-xs text-slate-400 font-semibold uppercase">R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por unidade</p>
+                              {item.pricingType === 'weight' ? (
+                                <p className="text-xs text-slate-400 font-semibold uppercase">
+                                  R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg · {(item.weightGrams ?? 0).toLocaleString('pt-BR')} g
+                                </p>
+                              ) : (
+                                <p className="text-xs text-slate-400 font-semibold uppercase">
+                                  R$ {item.unitPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por unidade
+                                </p>
+                              )}
                             </div>
                             <button 
                               onClick={() => handleEditItem(item)}
@@ -417,8 +468,25 @@ export default function App() {
                 <X size={24} />
               </button>
             </div>
-            
-            <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Qual o preço estimado?</label>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button 
+                onClick={() => { setIsWeightMode(false); setWeightInput(0); }}
+                className={`py-3 rounded-2xl font-bold text-sm border ${!isWeightMode ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
+              >
+                Preço por unidade
+              </button>
+              <button 
+                onClick={() => { setIsWeightMode(true); setWeightInput(weightInput || 500); }}
+                className={`py-3 rounded-2xl font-bold text-sm border ${isWeightMode ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
+              >
+                Preço por kg
+              </button>
+            </div>
+
+            <label className="block text-slate-500 text-xs font-bold uppercase mb-2">
+              {isWeightMode ? 'Preço por kg' : 'Qual o preço estimado?'}
+            </label>
             <div className="relative mb-6">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-400">R$</span>
               <input 
@@ -433,6 +501,24 @@ export default function App() {
                 className="w-full pl-16 pr-4 py-6 bg-slate-100 rounded-2xl border-none focus:ring-4 focus:ring-indigo-100 text-4xl font-black text-slate-900 transition-all placeholder:text-slate-200"
               />
             </div>
+
+            {isWeightMode && (
+              <div className="mb-4">
+                <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Peso total (gramas)</label>
+                <div className="flex items-center gap-3">
+                  <input 
+                    type="number"
+                    min="1"
+                    step="50"
+                    value={weightInput}
+                    onChange={(e) => setWeightInput(Number(e.target.value))}
+                    className="w-full px-4 py-4 bg-slate-100 rounded-2xl border-none focus:ring-4 focus:ring-indigo-100 text-2xl font-black text-slate-900 transition-all placeholder:text-slate-200"
+                    placeholder="ex: 800"
+                  />
+                  <span className="text-sm font-semibold text-slate-400 uppercase">g</span>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">

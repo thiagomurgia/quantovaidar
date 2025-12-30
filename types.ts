@@ -3,8 +3,10 @@ export interface BagItem {
   id: string;
   name: string;
   department: string;
-  unitPrice: number;
-  quantity: number;
+  unitPrice: number; // for items per unit or per kg
+  quantity: number; // units or packages
+  pricingType: 'unit' | 'weight';
+  weightGrams?: number; // used when pricingType === 'weight'
   timestamp: number;
 }
 
